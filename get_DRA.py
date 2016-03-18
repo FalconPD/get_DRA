@@ -1,4 +1,4 @@
-"Gets DRA data from Pearson DRA Dashboard Site"
+"""Gets DRA data from Pearson DRA Dashboard Site"""
 
 import cookielib
 import json
@@ -12,7 +12,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 
 def clean(text):
-    "Replaces non-breaking spaces and newlines with spaces and nothing respectively"
+
+    """Replaces non-breaking spaces and newlines with spaces and nothing respectively"""
 
     return text.replace(u'\xa0', u' ').replace(u'\x0a', u'')
 
@@ -23,7 +24,8 @@ def clean(text):
 #		i += 1
 
 def process_class_report(html, worksheet):
-    "Takes a class report in HTML and converts it to CSV output"
+
+    """Takes a class report in HTML and converts it to CSV output"""
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -88,7 +90,8 @@ def process_class_report(html, worksheet):
     return
 
 def main():
-    "Main function"
+
+    """Main function"""
 
     # Browser
     browser = mechanize.Browser()
@@ -188,7 +191,7 @@ def main():
                         url = 'https://dradashboard.com/DRA2Plus/reports/generate'
                         html = browser.open(url, data).read()
                         process_class_report(html, worksheet)
-    workbook.save('DRA Data {}.xlsx'.format(datetime.datetime.now()))
+    workbook.save('DRA Data {}.xlsx'.format(datetime.datetime.now().strftime('%m-%d-%Y %H%M%S')))
     exit(0)
 
 if __name__ == "__main__":
