@@ -1,13 +1,15 @@
-"Webscrapes DRA data from Pearson DRA Dashboard Site"
+"Gets DRA data from Pearson DRA Dashboard Site"
 
 import cookielib
 import json
 import getpass
 import datetime
-import csv
 import urllib
+import string
 import mechanize
 from bs4 import BeautifulSoup
+from openpyxl import Workbook
+from openpyxl.styles import Font
 
 def clean(text):
     "Replaces non-breaking spaces and newlines with spaces and nothing respectively"
@@ -20,7 +22,7 @@ def clean(text):
 #		print('{}:{}'.format(i, clean(item.get_text())))
 #		i += 1
 
-def process_class_report(html, csvfile):
+def process_class_report(html, worksheet):
     "Takes a class report in HTML and converts it to CSV output"
 
     soup = BeautifulSoup(html, "html.parser")
@@ -56,7 +58,7 @@ def process_class_report(html, csvfile):
         #print(spans)
         #print_indexes(spans)
 
-        csvfile.writerow([
+        worksheet.append([
             clean(header_spans[11].get_text()), # School Year
             clean(header_spans[7].get_text()), # Assessment Period
             clean(header_spans[13].get_text()), # School Name
@@ -89,83 +91,84 @@ def main():
     "Main function"
 
     # Browser
-    br = mechanize.Browser()
+    browser = mechanize.Browser()
 
     # Cookie Jar
-    cj = cookielib.LWPCookieJar()
-    br.set_cookiejar(cj)
+    cookie_jar = cookielib.LWPCookieJar()
+    browser.set_cookiejar(cookie_jar)
 
     # Browswer options
-    br.set_handle_equiv(True)
-    br.set_handle_gzip(True)
-    br.set_handle_redirect(True)
-    br.set_handle_referer(True)
-    br.set_handle_robots(False)
-    br.set_handle_refresh(mechanize._http.HTTPRefreshProcessor(), max_time=1)
+    browser.set_handle_equiv(True)
+    browser.set_handle_gzip(True)
+    browser.set_handle_redirect(True)
+    browser.set_handle_referer(True)
+    browser.set_handle_robots(False)
+    browser.set_handle_refresh(mechanize._http.HTTPRefreshProcessor(), max_time=1)
 
-    br.addheaders = [('User-agent', 'Chrome')]
+    browser.addheaders = [('User-agent', 'Chrome')]
 
     # Start by logging in to Pearson
-    br.open('https://dradashboard.com/DRA2Plus/login')
+    browser.open('https://dradashboard.com/DRA2Plus/login')
 
-    br.select_form(nr=0)
+    browser.select_form(nr=0)
 
-    br.form['username'] = raw_input("Username: ")
-    br.form['password'] = getpass.getpass("Password: ")
+    browser.form['username'] = raw_input("Username: ")
+    browser.form['password'] = getpass.getpass("Password: ")
 
-    br.submit()
+    browser.submit()
 
-    # Create a CSV file for output and write the header
-    filename = 'DRA Data {}.txt'.format(datetime.datetime.now())
-    print 'Writing data to {}'.format(filename)
-    myfile = open(filename, 'w')
-    csvfile = csv.writer(myfile)
-    csvfile.writerow([
-        'School Year',
-        'Assessment Period',
-        'School Name',
-        'Teacher',
-        'Class',
-        'Assessment Date/Range',
-        'Grade',
-        'Report Date',
-        'Student ID',
-        'Student Name',
-        'DRA2 Level',
-        'Percent of Accuracy',
-        'Words Per Minute',
-        'Reading Engagement',
-        'Oral Reading Fluency',
-        'Comprehension/PLC'])
+    # Create an XLSX workbook for output and write the header
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = 'DRA Data'
+    worksheet_header = ['School Year',
+                        'Assessment Period',
+                        'School Name',
+                        'Teacher',
+                        'Class',
+                        'Assessment Date/Range',
+                        'Grade',
+                        'Report Date',
+                        'Student ID',
+                        'Student Name',
+                        'DRA2 Level',
+                        'Percent of Accuracy',
+                        'Words Per Minute',
+                        'Reading Engagement',
+                        'Oral Reading Fluency',
+                        'Comprehension/PLC']
+    worksheet.append(worksheet_header)
+    for letter in string.uppercase[:len(worksheet_header)]:
+        worksheet['{}1'.format(letter)].font = Font(bold=True)
 
     # Now go to the report page
 
     # The years are in the report page, I haven't found an AJAX call to get it so we
     # have to use BeautifulSoup to parse the HTML. The first year has no value
     url = 'https://dradashboard.com/DRA2Plus/reports/viewReport/17'
-    report_page = BeautifulSoup(br.open(url).read(), 'html.parser')
+    report_page = BeautifulSoup(browser.open(url).read(), 'html.parser')
     for year in report_page.find(id='schoolYearId').find_all('option')[1:]:
         # From here on we can use AJAX calls to get the data we need
         print 'Getting periods for year {}'.format(year.get_text())
         url = 'https://dradashboard.com/DRA2Plus/reports/loadFilterData/{}/periodId'.format(
             year['value'])
-        periods = json.loads(br.open(url).read())
+        periods = json.loads(browser.open(url).read())
         for period in periods['data']:
             print ' Getting schools for period {}'.format(period['value'])
             url = 'https://dradashboard.com/DRA2Plus/reports/loadFilterData/{}/schoolId&{}'.format(
                 str(period['id']), year['value'])
-            schools = json.loads(br.open(url).read())
+            schools = json.loads(browser.open(url).read())
             for school in schools['data']:
                 print '  Getting teachers for school {}'.format(school['value'])
                 url = ('https://dradashboard.com/DRA2Plus/reports/loadFilterData/{}/'
                        'teacherId&{}').format(str(school['id']), year['value'])
-                teachers = json.loads(br.open(url).read())
+                teachers = json.loads(browser.open(url).read())
                 for teacher in teachers['data']:
                     print '   Getting classes for teacher {}'.format(teacher['value'])
                     url = ('https://dradashboard.com/DRA2Plus/reports/loadFilterData/{}/'
                            'classId&{}&{}').format(str(teacher['id']), year['value'],
                                                    str(school['id']))
-                    classes = json.loads(br.open(url).read())
+                    classes = json.loads(browser.open(url).read())
                     for this_class in classes['data']:
                         # We've got everything we need to manualy build a POST request
                         print '    Getting report for class {}'.format(this_class['value'])
@@ -183,9 +186,9 @@ def main():
                             'reportName' : 'Class Reporting Form'}
                         data = urllib.urlencode(parameters)
                         url = 'https://dradashboard.com/DRA2Plus/reports/generate'
-                        html = br.open(url, data).read()
-                        process_class_report(html, csvfile)
-    myfile.close()
+                        html = browser.open(url, data).read()
+                        process_class_report(html, worksheet)
+    workbook.save('DRA Data {}.xlsx'.format(datetime.datetime.now()))
     exit(0)
 
 if __name__ == "__main__":
