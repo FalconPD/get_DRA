@@ -1,3 +1,5 @@
+# pylint: disable=no-member
+
 """Gets DRA data from Pearson DRA Dashboard Site"""
 
 import cookielib
@@ -106,7 +108,6 @@ def main():
     browser.set_handle_redirect(True)
     browser.set_handle_referer(True)
     browser.set_handle_robots(False)
-    browser.set_handle_refresh(mechanize._http.HTTPRefreshProcessor(), max_time=1)
 
     browser.addheaders = [('User-agent', 'Chrome')]
 
