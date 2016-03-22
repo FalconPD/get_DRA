@@ -19,11 +19,20 @@ def clean(text):
 
     return text.replace(u'\xa0', u' ').replace(u'\x0a', u'')
 
+def get_clean_text(items):
+
+    """Takes a list of html tags and returns a list of cleaned text from the tags"""
+
+    clean_items = []
+    for item in items:
+        clean_items.append(clean(item.get_text()))
+    return clean_items
+
 #def print_indexes(items):
-#	i = 0
-#	for item in items:
-#		print('{}:{}'.format(i, clean(item.get_text())))
-#		i += 1
+#    i = 0
+#    for item in items:
+#        print('{}:{}'.format(i, clean(item.get_text())))
+#        i += 1
 
 def process_class_report(html, worksheet):
 
@@ -44,50 +53,64 @@ def process_class_report(html, worksheet):
 
     # The spans in the header tell us Teacher Name, Asessment Date/Range, Class, Assessment Period
     # Grade, School Year, School Name, and Report Date
-    header_spans = header.find_all('span')
+    header_spans = get_clean_text(header.find_all('span'))
 
     # We only want the direct children for the data table since each row has another table in it
+    rows = data.find_all('tr', recursive=False)
+
+    # Use the column headers for the table to tell us what type of data we can expect
+    column_headers = get_clean_text(rows[1].find_all('div'))
+    if column_headers == ['Student ID', 'Student Name', 'DRA2 Level', 'Percent of Accuracy',
+                          'Words Per Minute', 'Reading Engagement', 'Oral Reading Fluency',
+                          'Comprehension/PLC']:
+        data_type = 'Standard'
+    elif column_headers == ['Student ID', 'Student Name', 'DRA2 Level', 'Percent of Accuracy',
+                            'Words Per Minute', 'Oral Reading Fluency', 'Comprehension/PLC']:
+        data_type = 'Without Reading Engagement'
+    else:
+        print 'Unkown data type, exiting.'
+        exit(0)
+
+#    i = 0
+#    for row in data.find_all('tr', recursive=False)[:4]:
+#        print '=== Row {} ==='.format(i)
+#        divs = row.find_all('div')
+#        print_indexes(divs)
+#        print '=============='
+#        i += 1
+
     # The first four data rows are column headers and nonsense
-    for row in data.find_all('tr', recursive=False)[4:]:
+    for row in rows[4:]:
         # The first two divs are StudentID and StudentName and some score data
-        divs = row.find_all('div')
+        divs = get_clean_text(row.find_all('div'))
 
         # The spans contain the actual scores in a funky format
-        spans = row.find_all('span')
+        spans = get_clean_text(row.find_all('span'))
 
-        #print('Divs')
-        #print(divs)
-        #print_indexes(divs)
-        #print('Spans')
-        #print(spans)
-        #print_indexes(spans)
+        output_row = []
+        output_row.append(header_spans[11]) # School Year
+        output_row.append(header_spans[7]) # Assessment Period
+        output_row.append(header_spans[13]) # School Name
+        output_row.append(header_spans[1]) # Teacher
+        output_row.append(header_spans[5]) # Class
+        output_row.append(header_spans[3]) # Assessment Date/Range
+        output_row.append(header_spans[9]) # Grade
+        output_row.append(header_spans[15]) # Report Date
+        output_row.append(divs[0]) # Student ID
+        output_row.append(divs[1]) # Student Name
+        output_row.append('{} {} {}'.format(spans[8], spans[9], spans[10])) #DRA Level
+        output_row.append(divs[6]) #Percent of Accuracy
+        output_row.append(divs[7]) #Words Per Minute
+        if data_type == 'Standard':
+            output_row.append('{}/{}'.format(spans[11], spans[13])) # Reading engagement
+            output_row.append('{}/{}'.format(spans[14], spans[16])) # Oral Reading Fluency
+            output_row.append('{}/{}'.format(spans[17], spans[19])) # Comprehension/PLC
+        elif data_type == 'Without Reading Engagement':
+            output_row.append('/') # Reading engagement
+            output_row.append('{}/{}'.format(spans[11], spans[13])) # Oral Reading Fluency
+            output_row.append('{}/{}'.format(spans[14], spans[16])) # Comprehension/PLC
 
-        worksheet.append([
-            clean(header_spans[11].get_text()), # School Year
-            clean(header_spans[7].get_text()), # Assessment Period
-            clean(header_spans[13].get_text()), # School Name
-            clean(header_spans[1].get_text()), # Teacher
-            clean(header_spans[5].get_text()), # Class
-            clean(header_spans[3].get_text()), # Assessment Date/Range
-            clean(header_spans[9].get_text()), # Grade
-            clean(header_spans[15].get_text()), # Report Date
-            clean(divs[0].get_text()), # Student ID
-            clean(divs[1].get_text()), # Student Name
-            '{} {} {}'.format( # DRA2 Level
-                clean(spans[8].get_text()),
-                clean(spans[9].get_text()),
-                clean(spans[10].get_text())),
-            clean(divs[6].get_text()), #Percent of Accuracy
-            clean(divs[7].get_text()), #Words Per Minute
-            '{}/{}'.format( # Reading engagement
-                clean(spans[11].get_text()),
-                clean(spans[13].get_text())),
-            '{}/{}'.format( # Oral Reading Fluency
-                clean(spans[14].get_text()),
-                clean(spans[16].get_text())),
-            '{}/{}'.format( # Comprehension/PLC
-                clean(spans[17].get_text()),
-                clean(spans[19].get_text()))])
+        worksheet.append(output_row)
 
     return
 
